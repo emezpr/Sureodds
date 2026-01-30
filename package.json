@@ -1,8 +1,8 @@
 
 {
-  "name": "sureodds-ai",
+  "name": "rollover-ai",
   "version": "1.0.0",
-  "description": "Professional Football Prediction Engine",
+  "description": "Professional Football Prediction Engine for Rollover Strategies",
   "type": "module",
   "scripts": {
     "dev": "vite",

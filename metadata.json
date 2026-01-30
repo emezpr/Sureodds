@@ -1,7 +1,7 @@
 {
-  "name": "SureOdds AI",
-  "short_name": "SureOdds",
-  "description": "Professional Football Prediction Engine using Gemini 3 Pro reasoning.",
+  "name": "Rollover AI",
+  "short_name": "Rollover",
+  "description": "Professional Football Rollover Strategy Engine using advanced AI reasoning.",
   "requestFramePermissions": [
     "geolocation"
   ]
