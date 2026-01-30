@@ -35,15 +35,15 @@ export interface AppState {
 // --- SERVICE ---
 const fetchPredictions = async (excludeMatches: string[] = []): Promise<{ predictions: Prediction[], sources: GroundingSource[] }> => {
   // Use the API key directly from the environment
-  const ai = new GoogleGenAI({ apiKey: process.env.API_KEY || '' });
+  const apiKey = process.env.API_KEY;
   
-  if (!process.env.API_KEY) {
-    throw new Error("API_KEY environment variable is not set. Please add it to your project environment.");
+  if (!apiKey) {
+    throw new Error("API_KEY is missing. Please add it to your Vercel Environment Variables.");
   }
 
+  const ai = new GoogleGenAI({ apiKey });
   const today = new Date().toLocaleDateString('en-GB', { day: 'numeric', month: 'long', year: 'numeric' });
 
-  // System instruction for the model to behave as a pro analyst
   const systemInstruction = "You are a world-class football data analyst and betting specialist. Your goal is to provide high-accuracy betting tips based on real-world data.";
 
   const prompt = `
@@ -74,17 +74,16 @@ const fetchPredictions = async (excludeMatches: string[] = []): Promise<{ predic
 
   try {
     const response = await ai.models.generateContent({
-      model: 'gemini-3-pro-preview',
+      model: 'gemini-3-flash-preview',
       contents: prompt,
       config: {
         systemInstruction,
         tools: [{ googleSearch: {} }],
-        temperature: 0.2, // Low temperature for high precision
+        temperature: 0.1, // Lower temperature for more stable predictions
       },
     });
 
     const text = response.text || '';
-    // Extract JSON from response text in case the model adds extra words
     const jsonMatch = text.match(/\[[\s\S]*\]/);
     let predictions: Prediction[] = [];
     if (jsonMatch) {
@@ -97,7 +96,6 @@ const fetchPredictions = async (excludeMatches: string[] = []): Promise<{ predic
     }
 
     const sources: GroundingSource[] = [];
-    // Extract grounding chunks for source links
     const chunks = response.candidates?.[0]?.groundingMetadata?.groundingChunks || [];
     chunks.forEach((chunk: any) => {
       if (chunk.web?.uri) {
@@ -105,13 +103,16 @@ const fetchPredictions = async (excludeMatches: string[] = []): Promise<{ predic
       }
     });
 
-    // Remove duplicates
     const uniqueSources = Array.from(new Set(sources.map(s => s.uri)))
       .map(uri => sources.find(s => s.uri === uri) as GroundingSource);
 
     return { predictions: predictions.slice(0, 5), sources: uniqueSources };
   } catch (error: any) {
     console.error("Gemini Service Error", error);
+    // Provide a clearer error for the 429 case
+    if (error.message?.includes('429') || error.message?.includes('quota')) {
+      throw new Error("Daily limit reached for the free AI engine. Please try again in a few minutes.");
+    }
     throw new Error(error.message || "Analysis engine offline. Please retry in a few moments.");
   }
 };
@@ -248,7 +249,6 @@ const App: React.FC = () => {
     <div className="min-h-screen bg-[#020617] text-slate-200">
       <Header />
       
-      {/* Ticker bar */}
       <div className="bg-emerald-600/10 border-b border-emerald-500/20 py-2.5 overflow-hidden">
         <div className="flex animate-marquee whitespace-nowrap items-center text-[10px] font-black text-emerald-400 uppercase tracking-widest">
           {[...Array(6)].map((_, i) => (
@@ -306,7 +306,6 @@ const App: React.FC = () => {
           <div className="space-y-2">
             {state.predictions.map((p, idx) => <PredictionCard key={idx} prediction={p} index={idx} />)}
             
-            {/* Grounding Info */}
             <div className="mt-20 p-8 bg-slate-900/20 rounded-3xl border border-white/5 backdrop-blur-sm">
               <div className="flex items-center justify-between mb-6">
                 <div>
@@ -337,13 +336,6 @@ const App: React.FC = () => {
           </p>
         </div>
       </footer>
-
-      <style>{`
-        @keyframes marquee { 0% { transform: translateX(0); } 100% { transform: translateX(-50%); } }
-        .animate-marquee { display: flex; width: max-content; animation: marquee 40s linear infinite; }
-        @keyframes fadeIn { from { opacity: 0; transform: translateY(10px); } to { opacity: 1; transform: translateY(0); } }
-        .animate-fadeIn { animation: fadeIn 0.5s ease-out forwards; }
-      `}</style>
     </div>
   );
 };
