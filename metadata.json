@@ -1,0 +1,8 @@
+{
+  "name": "SureOdds AI",
+  "short_name": "SureOdds",
+  "description": "Professional Football Prediction Engine using Gemini 3 Pro reasoning.",
+  "requestFramePermissions": [
+    "geolocation"
+  ]
+}

@@ -1,0 +1,9 @@
+
+run = "npx serve ."
+entrypoint = "index.html"
+
+[languages.typescript]
+pattern = "**/*.tsx"
+
+[modules]
+modules = ["nodejs-20"]
