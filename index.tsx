@@ -34,11 +34,10 @@ export interface AppState {
 
 // --- SERVICE ---
 const fetchPredictions = async (excludeMatches: string[] = []): Promise<{ predictions: Prediction[], sources: GroundingSource[] }> => {
-  // Use the API key directly from the environment
   const apiKey = process.env.API_KEY;
   
   if (!apiKey) {
-    throw new Error("API_KEY is missing. Please add it to your Vercel Environment Variables.");
+    throw new Error("API_KEY is missing in Vercel settings.");
   }
 
   const ai = new GoogleGenAI({ apiKey });
@@ -56,14 +55,17 @@ const fetchPredictions = async (excludeMatches: string[] = []): Promise<{ predic
     CRITICAL MARKET DIVERSITY: 
     Select the safest option for each match from: Double Chance (1X, X2), Over/Under Goals (O1.5, U3.5), Draw No Bet (DNB), Both Teams to Score (BTTS).
 
-    Return the results in a valid JSON format only, structured as an array of 5 objects:
+    Return ONLY a JSON array of 5 objects:
     [
       {
         "match": "Team A vs Team B",
         "league": "League Name",
         "kickoffTime": "HH:MM GMT",
         "analysis": {
-          "form": "...", "keyPlayers": "...", "last5Games": "...", "conditions": "..."
+          "form": "Detailed form info",
+          "keyPlayers": "Injury/player news",
+          "last5Games": "H2H data",
+          "conditions": "Pitch/weather/stadium"
         },
         "betRecommendation": "Recommended Market",
         "confidence": 95,
@@ -79,20 +81,23 @@ const fetchPredictions = async (excludeMatches: string[] = []): Promise<{ predic
       config: {
         systemInstruction,
         tools: [{ googleSearch: {} }],
-        temperature: 0.1, // Lower temperature for more stable predictions
+        temperature: 0.1,
       },
     });
 
     const text = response.text || '';
     const jsonMatch = text.match(/\[[\s\S]*\]/);
     let predictions: Prediction[] = [];
+    
     if (jsonMatch) {
       try {
         predictions = JSON.parse(jsonMatch[0]);
       } catch (e) { 
-        console.error("JSON Parse Error", e);
-        throw new Error("Failed to process prediction data.");
+        console.error("JSON Parsing failed", text);
+        throw new Error("The AI returned invalid data. Please try again.");
       }
+    } else {
+      throw new Error("The AI could not find enough quality matches for today. Try refreshing.");
     }
 
     const sources: GroundingSource[] = [];
@@ -108,12 +113,11 @@ const fetchPredictions = async (excludeMatches: string[] = []): Promise<{ predic
 
     return { predictions: predictions.slice(0, 5), sources: uniqueSources };
   } catch (error: any) {
-    console.error("Gemini Service Error", error);
-    // Provide a clearer error for the 429 case
-    if (error.message?.includes('429') || error.message?.includes('quota')) {
-      throw new Error("Daily limit reached for the free AI engine. Please try again in a few minutes.");
+    console.error("Fetch Error:", error);
+    if (error.message?.includes('429')) {
+      throw new Error("Daily AI limits reached. Please try again in 1 hour.");
     }
-    throw new Error(error.message || "Analysis engine offline. Please retry in a few moments.");
+    throw new Error(error.message || "An unexpected error occurred.");
   }
 };
 
@@ -227,7 +231,7 @@ const App: React.FC = () => {
       const { predictions, sources } = await fetchPredictions(isRefresh ? state.predictions.map(p => p.match) : []);
       setState({
         predictions, sources, loading: false,
-        error: predictions.length === 0 ? "No suitable 'sure' matches found for today. Our engine filters only the highest probability games." : null,
+        error: predictions.length === 0 ? "No suitable matches found right now. Try refreshing in a moment." : null,
         lastUpdated: new Date().toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' })
       });
     } catch (err: any) {
@@ -265,13 +269,13 @@ const App: React.FC = () => {
         <section className="text-center mb-16 space-y-8 relative">
           <div className="absolute top-0 left-1/2 -translate-x-1/2 w-64 h-64 bg-emerald-500/10 blur-[100px] rounded-full -z-10"></div>
           <div className="inline-block px-4 py-1.5 bg-slate-900/50 rounded-full border border-slate-800 text-[10px] font-black text-slate-400 uppercase tracking-widest">
-            PRO ENGINE v3.0
+            FLASH ENGINE v1.2
           </div>
           <h1 className="brand-font text-6xl md:text-8xl text-white tracking-tighter leading-none">
             THE <span className="text-emerald-500">DAILY FIVE</span>
           </h1>
           <p className="text-slate-400 max-w-xl mx-auto text-lg font-medium">
-            The world's first AI-native betting analyst. 5 safest value picks scanned from global leagues in real-time.
+            Professional AI-native betting analyst. 5 safest value picks scanned from global leagues in real-time.
           </p>
           <div className="flex flex-col sm:flex-row justify-center gap-4 pt-4">
             <button 
@@ -294,13 +298,13 @@ const App: React.FC = () => {
         {state.loading && !isRefreshing ? (
           <div className="flex flex-col items-center justify-center py-20 space-y-4">
             <div className="w-12 h-12 border-4 border-slate-800 border-t-emerald-500 rounded-full animate-spin"></div>
-            <p className="text-slate-500 text-xs font-black uppercase tracking-widest">Scouring Global Markets...</p>
+            <p className="text-slate-500 text-xs font-black uppercase tracking-widest">Searching Global Fixtures...</p>
           </div>
         ) : state.error ? (
           <div className="bg-red-500/5 border border-red-500/10 p-12 rounded-3xl text-center max-w-lg mx-auto">
-            <h3 className="text-xl font-black text-white mb-2 uppercase">Analysis Failure</h3>
+            <h3 className="text-xl font-black text-white mb-2 uppercase">Service Notice</h3>
             <p className="text-slate-500 mb-8 font-medium">{state.error}</p>
-            <button onClick={() => loadData()} className="bg-white text-black px-8 py-3 rounded-xl font-bold transition-transform hover:scale-105 active:scale-95">RETRY CONNECTION</button>
+            <button onClick={() => loadData()} className="bg-white text-black px-8 py-3 rounded-xl font-bold transition-transform hover:scale-105 active:scale-95">RETRY NOW</button>
           </div>
         ) : (
           <div className="space-y-2">
@@ -332,7 +336,7 @@ const App: React.FC = () => {
         <div className="max-w-md mx-auto px-4">
           <p className="text-slate-600 text-[10px] font-black tracking-widest uppercase mb-4">STRICTLY 18+ | GAMBLE RESPONSIBLY</p>
           <p className="text-slate-700 text-[9px] leading-relaxed italic">
-            SureOdds AI provides mathematical predictions based on historical trends and current data. Outcomes are never guaranteed. Use this data as a support tool, not as a financial advisor.
+            SureOdds AI uses mathematical analysis of publicly available sports data. Outcomes are never guaranteed. Always bet responsibly.
           </p>
         </div>
       </footer>
